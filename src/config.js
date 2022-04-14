@@ -19,21 +19,34 @@ const solanaMetadata = {
   ],
 };
 
-// If you have selected Solana then the collection starts from 0 automatically
 const layerConfigurations = [
   {
-    growEditionSizeTo: 2,
+    growEditionSizeTo: 16,
     layersOrder: [
-      { name: "Background" },
-      { name: "Eyeball" },
-      { name: "Eye color" },
-      { name: "Iris" },
-      { name: "Shine" },
-      { name: "Bottom lid" },
-      { name: "Top lid" },
-    ]
+      { name: "00 Background", group: "background" },
+      { name: "01 Base", group: "body" },
+      { name: "02 Antenna", group: "hat" },
+      { name: "03 Head", group: "body" },
+      { name: "04 Eyes", group: "details" },
+      { name: "05 Ears", group: "details" },
+      { name: "06 MouthNose", group: "details" },
+      { name: "07 Hats", group: "hat" },
+      { name: "08 Bottom", group: "body" },
+    ],
   },
 ];
+
+// If you have selected Solana then the collection starts from 0 automatically
+// const layerConfigurations = [
+//   {
+//     growEditionSizeTo: 27,
+//     layersOrder: [
+//       { name: "bkg" },
+//       { name: "mid" },
+//       { name: "top" }
+//     ]
+//   },
+// ];
 
 /* Example of configuration settings
 const layerConfigurations = [
@@ -80,8 +93,8 @@ const shuffleLayerConfigurations = false;
 const debugLogs = false;
 
 const format = {
-  width: 512,
-  height: 512,
+  width: 362,
+  height: 362,
   smoothing: false,
 };
 
@@ -143,6 +156,31 @@ const preview_gif = {
   imageName: "preview.gif",
 };
 
+const paletteGroups = [
+  {
+    name: "sample",
+    palettes: {
+      background: ["white"],
+      body: ["brown"],
+      hat: ["blue"],
+      details: ["yellow"],
+    },
+  },
+];
+
+const palettes = {
+  brown: {
+    fill: ["#B2A29D"],
+    stroke: ["#3E241E"],
+  },
+  blue: {
+    fill: ["#A3C1E1"],
+    stroke: ["#284962"],
+  },
+  white: ["#ffffff"],
+  yellow: ["#FCFC54"],
+};
+
 module.exports = {
   format,
   background,
@@ -159,5 +197,7 @@ module.exports = {
   solanaMetadata,
   gif,
   preview_gif,
-  IMG_FORMAT
+  IMG_FORMAT,
+  paletteGroups,
+  palettes,
 };
