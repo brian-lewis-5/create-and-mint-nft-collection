@@ -5,7 +5,7 @@ const sha1 = require(`${FOLDERS.nodeModulesDir}/sha1`);
 const { createCanvas, loadImage } = require(`${FOLDERS.nodeModulesDir}/canvas`);
 const { NETWORK } = require(`${FOLDERS.constantsDir}/network.js`);
 const { NFT_DETAILS } = require(`${FOLDERS.constantsDir}/nft_details.js`);
-const path = require('path')
+const path = require("path");
 const {
   format,
   background,
@@ -19,8 +19,11 @@ const {
   network,
   solanaMetadata,
   gif,
-  IMG_FORMAT
+  IMG_FORMAT,
+  paletteGroups,
+  palettes: availablePalettes,
 } = require(`${FOLDERS.sourceDir}/config.js`);
+const { chooseColors } = require("./colors");
 const canvas = createCanvas(format.width, format.height);
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = format.smoothing;
@@ -34,17 +37,26 @@ const HashlipsGiffer = require(`${FOLDERS.modulesDir}/HashlipsGiffer.js`);
 const PNG_FORMAT = "png";
 const SVG_FORMAT = "svg";
 
-const layersDir = (IMG_FORMAT == PNG_FORMAT ) ? path.join(BASEDIR, "/layers") : path.join(BASEDIR, "/layers_svgs");
-const { ImageEngine } = (IMG_FORMAT == PNG_FORMAT ) ?  require(path.join(BASEDIR, "/src/pngengine.js")) : require(path.join(BASEDIR, "/src/svgengine.js"));
+const layersDir =
+  IMG_FORMAT == PNG_FORMAT
+    ? path.join(BASEDIR, "/layers")
+    : path.join(BASEDIR, "/layers_svgs");
+const { ImageEngine } =
+  IMG_FORMAT == PNG_FORMAT
+    ? require(path.join(BASEDIR, "/src/pngengine.js"))
+    : require(path.join(BASEDIR, "/src/svgengine.js"));
 
 //IMG_FORMAT Specific constants
-const Image_uri =  (IMG_FORMAT == PNG_FORMAT ) ? "image.png" : "image.svg";
-const Image_type= (IMG_FORMAT == PNG_FORMAT ) ? "image.png" : "image/svg";
-const Image_extension = (IMG_FORMAT == PNG_FORMAT ) ? "png" : "svg";
+const Image_uri = IMG_FORMAT == PNG_FORMAT ? "image.png" : "image.svg";
+const Image_type = IMG_FORMAT == PNG_FORMAT ? "image.png" : "image/svg";
+const Image_extension = IMG_FORMAT == PNG_FORMAT ? "png" : "svg";
 
 console.log("Using Image format: " + IMG_FORMAT);
 
-const { needsFiltration } = require('./filters');
+const { needsFiltration } = require("./filters");
+const {
+  combinationOfTraitsAlreadyExists,
+} = require("./filters/combination_traits");
 
 let hashlipsGiffer = null;
 
@@ -89,7 +101,9 @@ const getElements = (path) => {
     .filter((item) => !/(^|\/)\.[^\/\.]/g.test(item))
     .map((i, index) => {
       if (i.includes(DNA_DELIMITER)) {
-        throw new Error(`layer name can not contain "${DNA_DELIMITER}" characters, please fix: ${i}`);
+        throw new Error(
+          `layer name can not contain "${DNA_DELIMITER}" characters, please fix: ${i}`
+        );
       }
       return {
         id: index,
@@ -109,7 +123,7 @@ const layersSetup = (layersOrder) => {
       layerObj.options?.["displayName"] != undefined
         ? layerObj.options?.["displayName"]
         : layerObj.name,
-    maxRepeatedTrait: layerObj.maxRepeatedTrait,    
+    maxRepeatedTrait: layerObj.maxRepeatedTrait,
     blend:
       layerObj.options?.["blend"] != undefined
         ? layerObj.options?.["blend"]
@@ -122,6 +136,7 @@ const layersSetup = (layersOrder) => {
       layerObj.options?.["bypassDNA"] !== undefined
         ? layerObj.options?.["bypassDNA"]
         : false,
+    ...(layerObj.group ? { group: layerObj.group } : {}),
   }));
   return layers;
 };
@@ -140,7 +155,8 @@ const genColor = () => {
 };
 
 const drawBackground = () => {
-  ctx.fillStyle = background.static ? background.default : genColor();
+  ctx.fillStyle = genColor();
+  //ctx.fillStyle = background.static ? background.default : genColor();
   ctx.fillRect(0, 0, format.width, format.height);
 };
 
@@ -189,43 +205,43 @@ const addMetadata = (_dna, _edition) => {
         edition: _edition,
         date: dateTime,
         compiler: "HashLips Art Engine",
-      }
+      },
     };
   }
   metadataList.push(tempMetadata);
   attributesList = [];
 };
 
-const addAttributes = (_element) => {
+const addAttributes = (_element, colors) => {
   let selectedElement = _element.layer.selectedElement;
 
   //Added ability for user to state whether they are using blank images or blank keyword within image names so that the code can already cater for it as the norm is to remove blanks from attribute lists.
   if (NFT_DETAILS.ignoreAllNamesWithBlank) {
     if (!selectedElement.name.trim().toLowerCase().includes("blank")) {
-      addToAttrbutesList(_element.layer.name, selectedElement.name);
+      addToAttrbutesList(_element.layer.name, selectedElement.name, colors);
     }
   } else if (NFT_DETAILS.ignoreExactBlankName) {
     if (selectedElement.name.trim().toLowerCase() !== "blank") {
-      addToAttrbutesList(_element.layer.name, selectedElement.name);
+      addToAttrbutesList(_element.layer.name, selectedElement.name, colors);
     }
   } else {
-    addToAttrbutesList(_element.layer.name, selectedElement.name);
+    addToAttrbutesList(_element.layer.name, selectedElement.name, colors);
   }
 };
 
 function addToAttrbutesList(_layerName, _elementValue) {
   attributesList.push({
     trait_type: _layerName,
-    value: _elementValue
+    value: _elementValue,
   });
 }
 
 const loadLayerImg = async (_layer) => {
   try {
     const image = await ImageEngine.loadImage(_layer);
-    return { 
-      layer: _layer, 
-      loadedImage: image 
+    return {
+      layer: _layer,
+      loadedImage: image,
     };
   } catch (error) {
     console.error("Error loading image:", error);
@@ -240,10 +256,10 @@ const addText = (_sig, x, y, size) => {
   ctx.fillText(_sig, x, y);
 };
 
-const drawElement = (_renderObject, _index, _layersLen) => {
-  ImageEngine.drawElement(_renderObject, _index, _layersLen);
-  
-  addAttributes(_renderObject);
+const drawElement = (_renderObject, _index, _layersLen, colors) => {
+  ImageEngine.drawElement(_renderObject, _index, _layersLen, colors);
+
+  addAttributes(_renderObject, colors);
 };
 
 const constructLayerToDna = (_dna = "", _layers = []) => {
@@ -255,6 +271,7 @@ const constructLayerToDna = (_dna = "", _layers = []) => {
       name: layer.name,
       blend: layer.blend,
       opacity: layer.opacity,
+      group: layer.group,
       selectedElement: selectedElement,
     };
   });
@@ -325,23 +342,28 @@ const selectTraits = (layers) => {
           name: layer.elements[i].name,
           filename: layer.elements[i].filename,
           bypassDNA: layer.bypassDNA,
-          maxRepeatedTrait: layer.maxRepeatedTrait
-          },
-        );
+          maxRepeatedTrait: layer.maxRepeatedTrait,
+        });
       }
     }
   });
   return traits;
 };
 
-const createDna = (traits) => {
+const createDna = (traits, colors = {}) => {
   let dna = [];
 
   traits.forEach((trait) => {
     dna.push(
-      `${trait.id}:${trait.filename}${
-        trait.bypassDNA ? "?bypassDNA=true" : ""
-      }`
+      `${trait.id}:${trait.filename}${trait.bypassDNA ? "?bypassDNA=true" : ""}`
+    );
+  });
+
+  Object.entries(colors).forEach(([k, v]) => {
+    dna.push(
+      `${k}{${v.fill ? "fill:" + v.fill + ";" : ""}${
+        v.stroke ? "stroke:" + v.stroke + ";" : ""
+      }}`
     );
   });
 
@@ -353,7 +375,9 @@ const writeMetaData = (_data) => {
 };
 
 const saveMetaDataSingleFile = (_editionCount) => {
-  let metadata = metadataList.find((meta) => meta.custom_fields.edition == _editionCount);
+  let metadata = metadataList.find(
+    (meta) => meta.custom_fields.edition == _editionCount
+  );
   debugLogs
     ? console.log(
         `Writing metadata for ${_editionCount}: ${JSON.stringify(metadata)}`
@@ -384,19 +408,23 @@ const startCreating = async () => {
   let editionCount = 1;
   let failedCount = 0;
   let abstractedIndexes = [];
-  const _startCollectionEditionFrom = Number(NFT_DETAILS.startCollectionEditionFrom);
+  const _startCollectionEditionFrom = Number(
+    NFT_DETAILS.startCollectionEditionFrom
+  );
   for (
     let i =
       network == NETWORK.sol
         ? _startCollectionEditionFrom > 1
           ? _startCollectionEditionFrom
           : 0
-        : NFT_DETAILS.startCollectionEditionFrom === '0'
-          ? 0
-          : _startCollectionEditionFrom
-            ? _startCollectionEditionFrom 
-            : 1;
-    i <= layerConfigurations[layerConfigurations.length - 1].growEditionSizeTo + (_startCollectionEditionFrom > 1 && _startCollectionEditionFrom);
+        : NFT_DETAILS.startCollectionEditionFrom === "0"
+        ? 0
+        : _startCollectionEditionFrom
+        ? _startCollectionEditionFrom
+        : 1;
+    i <=
+    layerConfigurations[layerConfigurations.length - 1].growEditionSizeTo +
+      (_startCollectionEditionFrom > 1 && _startCollectionEditionFrom);
     i++
   ) {
     abstractedIndexes.push(i);
@@ -415,20 +443,47 @@ const startCreating = async () => {
     while (
       editionCount <= layerConfigurations[layerConfigIndex].growEditionSizeTo
     ) {
+      let colors;
+
+      if (IMG_FORMAT === SVG_FORMAT) {
+        colors = chooseColors(paletteGroups, availablePalettes);
+
+        Object.entries(colors).forEach(([k, v]) => {
+          Object.entries(v).forEach(([ik, iv]) => {
+            attributesList.push({
+              trait_type: `${k} ${ik}`,
+              value: iv,
+            });
+          });
+        });
+      }
+
       const traits = selectTraits(layers);
-      let newDna = createDna(traits);
+      let newDna = createDna(traits, colors);
       if (isDnaUnique(dnaList, newDna)) {
+        const maxRepeatedTraits =
+          layerConfigurations[layerConfigIndex].maxRepeatedTraits;
+        const incompatibleTraits =
+          layerConfigurations[layerConfigIndex].incompatibleTraits;
+        const layerItemsMaxRepeatedTraits =
+          layerConfigurations[layerConfigIndex].layerItemsMaxRepeatedTraits;
+        const dependentTraits =
+          layerConfigurations[layerConfigIndex].dependentTraits;
 
-        const maxRepeatedTraits = layerConfigurations[layerConfigIndex].maxRepeatedTraits;
-        const incompatibleTraits = layerConfigurations[layerConfigIndex].incompatibleTraits;
-        const layerItemsMaxRepeatedTraits = layerConfigurations[layerConfigIndex].layerItemsMaxRepeatedTraits;
-        const dependentTraits = layerConfigurations[layerConfigIndex].dependentTraits;
-
-        if (needsFiltration(selectedTraitsList, traits, maxRepeatedTraits, incompatibleTraits, layerItemsMaxRepeatedTraits, dependentTraits)) {
+        if (
+          needsFiltration(
+            selectedTraitsList,
+            traits,
+            maxRepeatedTraits,
+            incompatibleTraits,
+            layerItemsMaxRepeatedTraits,
+            dependentTraits
+          )
+        ) {
           failedCount++;
           if (failedCount >= uniqueDnaTorrance) {
             console.log(
-            `You need more layers or elements to grow your edition to ${layerConfigurations[layerConfigIndex].growEditionSizeTo} artworks!`
+              `You need more layers or elements to grow your edition to ${layerConfigurations[layerConfigIndex].growEditionSizeTo} artworks!`
             );
             writeMetaData(JSON.stringify(metadataList, null, 2));
             process.exit();
@@ -447,6 +502,13 @@ const startCreating = async () => {
           debugLogs ? console.log("Clearing canvas") : null;
           ImageEngine.clearRect();
           ctx.clearRect(0, 0, format.width, format.height);
+
+          let colors;
+
+          if (IMG_FORMAT === SVG_FORMAT) {
+            colors = chooseColors(paletteGroups, availablePalettes);
+          }
+
           if (gif.export) {
             hashlipsGiffer = new HashlipsGiffer(
               canvas,
@@ -465,7 +527,8 @@ const startCreating = async () => {
             drawElement(
               renderObject,
               index,
-              layerConfigurations[layerConfigIndex].layersOrder.length
+              layerConfigurations[layerConfigIndex].layersOrder.length,
+              colors
             );
             if (gif.export) {
               hashlipsGiffer.add();
@@ -483,7 +546,8 @@ const startCreating = async () => {
           console.log(
             `Created edition: ${abstractedIndexes[0]}, with DNA: ${sha1(
               newDna
-            )}`
+            )} and colors: `,
+            colors
           );
         });
         dnaList.add(filterDNAOptions(newDna));
