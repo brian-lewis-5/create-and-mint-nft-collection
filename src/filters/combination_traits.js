@@ -37,11 +37,11 @@ const combinationOfTraitsAlreadyExists  = (selectedTraitsList, newTraits, maxRep
   }
 
   // Loops through layerItemsMaxRepeatedTraits list
-  for (layerItem in layerItemsMaxRepeatedTraits) {
+  for (const [key, value] of Object.entries(layerItemsMaxRepeatedTraits)) {
 
     // Check if the selected trait has breached the layer item maximum repeatability limit and return true if that is the case
-    if (traitLayerItemCounts[`${layerItemsMaxRepeatedTraits[layerItem].name}`] > layerItemsMaxRepeatedTraits[layerItem].layerItemMaxRepeatedTrait) {
-      console.log(`Combination of traits filtered because of layer item (${layerItemsMaxRepeatedTraits[layerItem].name}) maximum repeatability filtration rule!`);
+    if (traitLayerItemCounts[`${value.name}`] > value.layerItemMaxRepeatedTrait) {
+      console.log(`Combination of traits filtered because of layer item (${value.name}) maximum repeatability filtration rule!`);
       return true;
     }
   }
